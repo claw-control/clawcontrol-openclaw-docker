@@ -1,0 +1,86 @@
+name: ${STACK_PROJECT_NAME:-clawcontrol-openclaw-docker}
+
+services:
+  openclaw-gateway:
+    image: ${OPENCLAW_IMAGE}
+    user: node
+    restart: unless-stopped
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      OPENCLAW_DIR: /var/lib/openclaw
+      OPENCLAW_STATE_DIR: /var/lib/openclaw
+    volumes:
+      - ${OPENCLAW_STATE_DIR:-./state/openclaw}:/var/lib/openclaw
+      - ${OPENCLAW_WORKSPACE_DIR:-./workspace}:/var/lib/openclaw/workspace
+    ports:
+      - 127.0.0.1:${OPENCLAW_GATEWAY_PORT}:18789
+      - 127.0.0.1:${OPENCLAW_BROWSER_UI_PORT}:18791
+    command:
+      [
+        "node",
+        "openclaw.mjs",
+        "gateway",
+        "run",
+        "--port",
+        "18789",
+        "--allow-unconfigured"
+      ]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:18789/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+        ]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
+
+  openclaw-cli:
+    image: ${OPENCLAW_IMAGE}
+    user: node
+    profiles: ["tools"]
+    stdin_open: true
+    tty: true
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      OPENCLAW_DIR: /var/lib/openclaw
+      OPENCLAW_STATE_DIR: /var/lib/openclaw
+    volumes:
+      - ${OPENCLAW_STATE_DIR:-./state/openclaw}:/var/lib/openclaw
+      - ${OPENCLAW_WORKSPACE_DIR:-./workspace}:/var/lib/openclaw/workspace
+    network_mode: service:openclaw-gateway
+    depends_on:
+      openclaw-gateway:
+        condition: service_healthy
+    entrypoint: ["node", "openclaw.mjs"]
+
+  runtime:
+    image: ${CLAWCONTROL_RUNTIME_IMAGE}
+    user: node
+    restart: "no"
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime
+      args:
+        OPENCLAW_IMAGE: ${OPENCLAW_IMAGE}
+        CLAWCONTROL_RUNTIME_NPM_SPEC: ${CLAWCONTROL_RUNTIME_NPM_SPEC}
+    depends_on:
+      openclaw-gateway:
+        condition: service_healthy
+    environment:
+      HOME: /var/lib/clawcontrol
+      CLAWCONTROL_CONFIG: /var/lib/clawcontrol/config.json
+      OPENCLAW_GATEWAY_URL: ws://openclaw-gateway:18789
+      CLAWCONTROL_GATEWAY_BOOTSTRAP_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      OPENCLAW_DIR: /var/lib/openclaw
+      OPENCLAW_STATE_DIR: /var/lib/openclaw
+      OPENCLAW_CLI_PATH: openclaw
+    volumes:
+      - ${RUNTIME_STATE_DIR:-./state/runtime}:/var/lib/clawcontrol
+      - ${OPENCLAW_STATE_DIR:-./state/openclaw}:/var/lib/openclaw
+    command: ["runtime", "run"]

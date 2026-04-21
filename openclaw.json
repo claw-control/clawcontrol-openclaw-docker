@@ -1,0 +1,18 @@
+{
+  "gateway": {
+    "bind": "lan",
+    "auth": {
+      "mode": "token",
+      "token": "${OPENCLAW_GATEWAY_TOKEN}"
+    },
+    "controlUi": {
+      "allowedOrigins": [
+        "http://127.0.0.1:${OPENCLAW_GATEWAY_PORT}",
+        "http://localhost:${OPENCLAW_GATEWAY_PORT}",
+        "http://127.0.0.1:${OPENCLAW_BROWSER_UI_PORT}",
+        "http://localhost:${OPENCLAW_BROWSER_UI_PORT}"
+      ],
+      "allowInsecureAuth": true
+    }
+  }
+}
